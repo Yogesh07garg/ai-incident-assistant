@@ -1,12 +1,11 @@
-name: build and push target app
+name: Build and Push Target App
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
-    - 'target-app/**'
-    - '.github/workflows/build.yml'
+      - 'target-app/**'
+      - '.github/workflows/build.yml'
 
 jobs:
   build-and-push:
@@ -14,7 +13,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-      
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -26,11 +25,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set lowercase repo owner
+        run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
+
       - name: Build and push image
         uses: docker/build-push-action@v5
         with:
           context: ./target-app
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/target-app:latest
-
-      
+          tags: ghcr.io/${{ env.OWNER_LC }}/target-app:latest
