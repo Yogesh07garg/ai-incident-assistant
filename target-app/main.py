@@ -34,7 +34,6 @@ def read_items():
 def config_check():
     required_vars = os.getenv("REQUIRED_API_KEY")
     if not required_vars:
-        raise HTTPException(status_code=500, detail="REQUIRED_API_KEY is not set in the environment variables.")
-    
+        raise RuntimeError("REQUIRED_API_KEY environment variable is not set")
     return {"status": "configured"}
 
