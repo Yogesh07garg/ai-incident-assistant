@@ -6,6 +6,10 @@ from dotenv import load_dotenv
 import json
 from google import genai
 from google.genai import types
+import requests
+
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+GITHUB_REPO = os.getenv("GITHUB_REPO")
 
 
 load_dotenv()
@@ -66,12 +70,14 @@ def get_container_logs(container_id: str):
         
     }
 
-DIAGNOSIS_PROMPT = """You are a DevOps incident diagnosis assistant. You will be given raw data about a Docker container: its exit code, whether it was OOM-killed, and its logs.
+
+DIAGNOSIS_PROMPT = """You are a DevOps incident diagnosis assistant. You will be given raw data about a Docker container (exit code, OOM status, logs) AND the status of the most recent CI/CD pipeline run.
 
 Classify the failure into exactly one of these categories:
 - "missing_or_bad_env_var": app raised an error referencing missing/invalid configuration
 - "oom_kill": exit_code is 137 and oom_killed is true, typically with sparse or empty logs
 - "unreachable_dependency": logs show a connection/DNS error to another service
+- "ci_build_failure": the CI run/job/step data indicates the build or pipeline itself failed
 - "healthy": no failure, container is running normally
 - "uncertain": evidence is insufficient or doesn't clearly match any category above
 
@@ -81,6 +87,9 @@ OOM killed: {oom_killed}
 Status: {status}
 Logs:
 {logs}
+
+CI/CD pipeline data:
+{ci_summary}
 """
 
 DIAGNOSIS_SCHEMA = {
@@ -88,7 +97,8 @@ DIAGNOSIS_SCHEMA = {
     "properties": {
         "failure_type": {
             "type": "string",
-            "enum": ["missing_or_bad_env_var", "oom_kill", "unreachable_dependency", "healthy", "uncertain"],
+            "enum": ["missing_or_bad_env_var", "oom_kill", "unreachable_dependency", "ci_build_failure", "healthy", "uncertain"],
+            
         },
         "root_cause": {"type": "string"},
         "suggested_fix": {"type": "string"},
@@ -110,10 +120,12 @@ def diagnose_container(container_id: str):
     exit_code = state.get('ExitCode')
     oom_killed = state.get('OOMKilled')
     status = container.status
+    ci_summary = get_latest_ci_run()
 
     prompt = DIAGNOSIS_PROMPT.format(exit_code=exit_code,
                                     oom_killed=oom_killed,
                                     status=status,
+                                    ci_summary=ci_summary,
                                     logs=logs if logs.strip() else "No logs available")
 
     response = ai_client.models.generate_content(
@@ -169,3 +181,35 @@ def list_incidents():
         }
         for i in results
     ]
+
+def get_latest_ci_run():
+    """
+    Fetches the most recent GitHub Actions workflow run and its jobs/steps,
+    returning a plain-text summary of what happened — pass/fail per step.
+    """
+    if not GITHUB_TOKEN or not GITHUB_REPO:
+        return "CI data unavailable (GITHUB_TOKEN or GITHUB_REPO not configured)."
+
+    headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
+
+    runs_url = f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs?per_page=1"
+    runs_res = requests.get(runs_url, headers=headers, timeout=10)
+    if runs_res.status_code != 200 or not runs_res.json().get("workflow_runs"):
+        return "No CI runs found."
+
+    latest_run = runs_res.json()["workflow_runs"][0]
+    run_id = latest_run["id"]
+    run_conclusion = latest_run["conclusion"]
+    run_status = latest_run["status"]
+
+    jobs_url = f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs/{run_id}/jobs"
+    jobs_res = requests.get(jobs_url, headers=headers, timeout=10)
+    jobs_data = jobs_res.json().get("jobs", [])
+
+    summary_lines = [f"Latest CI run: status={run_status}, conclusion={run_conclusion}"]
+    for job in jobs_data:
+        summary_lines.append(f"Job: {job['name']} — {job['conclusion']}")
+        for step in job.get("steps", []):
+            summary_lines.append(f"  Step: {step['name']} — {step['conclusion']}")
+
+    return "\n".join(summary_lines)
