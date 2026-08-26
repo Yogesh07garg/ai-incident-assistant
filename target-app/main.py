@@ -1,7 +1,8 @@
-from fastapi import FastAPI , HTTPException
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
+import httpx
 
 app = FastAPI()
 
@@ -37,3 +38,10 @@ def config_check():
         raise RuntimeError("REQUIRED_API_KEY environment variable is not set")
     return {"status": "configured"}
 
+@app.get("/dependency-check")
+def dependency_check():
+    try:
+        response = httpx.get("http://nonexistent-service:9999/status", timeout=3)
+        return {"status": "ok", "response": response.status_code}
+    except httpx.RequestError as e:
+        raise RuntimeError(f"Failed to reach dependency: {e}")
