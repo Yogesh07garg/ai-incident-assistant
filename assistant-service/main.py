@@ -10,6 +10,14 @@ from google.genai import types
 
 load_dotenv()
 app = FastAPI()
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 init_db()
 client = docker.from_env()
 ai_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
@@ -27,7 +35,7 @@ def get_containers():
         "name": c.name,
         "status": c.status,
         "image": c.image.tags[0] if c.image.tags else "unknown"
-    } for c in containers 
+    } for c in containers if c.image.tags and "target-app" in c.image.tags[0]
 
     ]
 
