@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 import docker
-
+from database import init_db, SessionLocal, Incident
 import os
 from dotenv import load_dotenv
 import json
@@ -10,6 +10,7 @@ from google.genai import types
 
 load_dotenv()
 app = FastAPI()
+init_db()
 client = docker.from_env()
 ai_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
@@ -91,7 +92,7 @@ DIAGNOSIS_SCHEMA = {
 @app.get("/diagnose/{container_id}")
 def diagnose_container(container_id: str):
     try:
-        container = client.containers.get(container_id) 
+        container = client.containers.get(container_id)
     except docker.errors.NotFound:
         raise HTTPException(status_code=404, detail="Container not found")
 
@@ -103,7 +104,7 @@ def diagnose_container(container_id: str):
     status = container.status
 
     prompt = DIAGNOSIS_PROMPT.format(exit_code=exit_code,
-                                    oom_killed=oom_killed, 
+                                    oom_killed=oom_killed,
                                     status=status,
                                     logs=logs if logs.strip() else "No logs available")
 
@@ -122,8 +123,41 @@ def diagnose_container(container_id: str):
     except json.JSONDecodeError:
         raise HTTPException(status_code=500, detail=f"model returned invalid JSON {response.text}")
 
+    db = SessionLocal()
+    incident = Incident(
+        container_id=container.short_id,
+        container_name=container.name,
+        failure_type=diagnosis.get("failure_type"),
+        root_cause=diagnosis.get("root_cause"),
+        suggested_fix=diagnosis.get("suggested_fix"),
+        confidence=diagnosis.get("confidence"),
+        raw_logs=logs,
+    )
+    db.add(incident)
+    db.commit()
+    db.close()
+
     return {
         "container_id": container.short_id,
         "diagnosis": diagnosis,
         "name": container.name
     }
+
+
+@app.get("/incidents")
+def list_incidents():
+    db = SessionLocal()
+    results = db.query(Incident).order_by(Incident.created_at.desc()).all()
+    db.close()
+    return [
+        {
+            "id": i.id,
+            "container_name": i.container_name,
+            "failure_type": i.failure_type,
+            "root_cause": i.root_cause,
+            "suggested_fix": i.suggested_fix,
+            "confidence": i.confidence,
+            "created_at": i.created_at.isoformat(),
+        }
+        for i in results
+    ]
