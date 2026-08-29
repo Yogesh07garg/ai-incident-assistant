@@ -45,3 +45,7 @@ def dependency_check():
         return {"status": "ok", "response": response.status_code}
     except httpx.RequestError as e:
         raise RuntimeError(f"Failed to reach dependency: {e}")
+
+
+
+print("hello world")
