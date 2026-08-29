@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: incidents
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  assistant-service:
+    build: ./assistant-service
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/incidents
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_REPO: ${GITHUB_REPO}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - postgres
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE: http://localhost:8001
+    ports:
+      - "5173:80"
+    depends_on:
+      - assistant-service
+
+volumes:
+  pgdata:

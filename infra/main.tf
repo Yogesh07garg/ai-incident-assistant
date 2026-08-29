@@ -71,6 +71,22 @@ resource "aws_instance" "app_server" {
   }
 }
 
-output "public_ip" {
-  value = aws_instance.app_server.public_ip
+resource "aws_eip" "app_server" {
+  domain = "vpc"
+
+  tags = {
+    Name = "incident-assistant-eip"
+  }
+}
+
+resource "aws_eip_association" "app_server" {
+  instance_id   = aws_instance.app_server.id
+  allocation_id = aws_eip.app_server.id
+}
+
+
+
+
+output "elastic_ip" {
+  value = aws_eip.app_server.public_ip
 }
