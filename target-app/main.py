@@ -48,4 +48,3 @@ def dependency_check():
 
 
 
-print("hello world")
