@@ -7,12 +7,13 @@ import json
 from google import genai
 from google.genai import types
 import requests
+load_dotenv()
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GITHUB_REPO = os.getenv("GITHUB_REPO")
 
 
-load_dotenv()
+
 app = FastAPI()
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -34,14 +35,62 @@ def health_check():
 @app.get("/containers")
 def get_containers():
     containers = client.containers.list(all=True)
-    return [{
-        "id": c.short_id,
-        "name": c.name,
-        "status": c.status,
-        "image": c.image.tags[0] if c.image.tags else "unknown"
-    } for c in containers if c.image.tags and "target-app" in c.image.tags[0]
 
-    ]
+    result = []
+
+    for c in containers:
+        # Get the image name directly from container metadata.
+        # This avoids c.image.tags, which can fail if the image was deleted.
+        image_name = c.attrs.get("Config", {}).get("Image", "")
+
+        if "target-app" not in image_name:
+            continue
+
+        result.append({
+            "id": c.short_id,
+            "name": c.name,
+            "status": c.status,
+            "image": image_name or "unknown"
+        })
+
+    return result
+
+@app.get("/ci-status")
+def ci_status():
+    if not GITHUB_TOKEN or not GITHUB_REPO:
+        raise HTTPException(status_code=503, detail="CI integration not configured")
+
+    headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
+    runs_url = f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs?per_page=1"
+    runs_res = requests.get(runs_url, headers=headers, timeout=10)
+
+    if runs_res.status_code != 200 or not runs_res.json().get("workflow_runs"):
+        raise HTTPException(status_code=404, detail="No CI runs found")
+
+    latest_run = runs_res.json()["workflow_runs"][0]
+    run_id = latest_run["id"]
+
+    jobs_url = f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs/{run_id}/jobs"
+    jobs_res = requests.get(jobs_url, headers=headers, timeout=10)
+    jobs_data = jobs_res.json().get("jobs", [])
+
+    return {
+        "run_number": latest_run["run_number"],
+        "status": latest_run["status"],
+        "conclusion": latest_run["conclusion"],
+        "commit_message": latest_run.get("display_title"),
+        "branch": latest_run["head_branch"],
+        "html_url": latest_run["html_url"],
+        "created_at": latest_run["created_at"],
+        "jobs": [
+            {
+                "name": job["name"],
+                "conclusion": job["conclusion"],
+                "steps": [{"name": s["name"], "conclusion": s["conclusion"]} for s in job.get("steps", [])],
+            }
+            for job in jobs_data
+        ],
+    }
 
 @app.get("/logs/{container_id}")
 def get_container_logs(container_id: str):

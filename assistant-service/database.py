@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine, Column, Integer, String, DateTime
 from sqlalchemy.orm import sessionmaker, declarative_base
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 
 DATABASE_URL = os.getenv(
@@ -24,7 +24,7 @@ class Incident(Base):
     suggested_fix = Column(String)
     confidence = Column(String)
     raw_logs = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 def init_db():
