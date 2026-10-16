@@ -32,7 +32,12 @@ def target_client(target):
 
 
 @pytest.fixture
-def assistant(monkeypatch):
+def assistant(monkeypatch, login_hash):
+    monkeypatch.setenv("LOGIN_USERNAME", "test-user")
+    monkeypatch.setenv("LOGIN_PASSWORD_HASH", login_hash)
+    monkeypatch.setenv("SESSION_SECRET", "test-only-session-secret-not-for-deployment")
+    monkeypatch.setenv("COOKIE_SECURE", "false")
+    monkeypatch.setenv("FRONTEND_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
     monkeypatch.syspath_prepend(str(ROOT / "assistant-service"))
     monkeypatch.setattr("dotenv.load_dotenv", lambda: None)
     # Use an inert SQLite engine rather than loading a PostgreSQL driver.
@@ -52,6 +57,8 @@ def assistant(monkeypatch):
 @pytest.fixture
 def assistant_client(assistant):
     with TestClient(assistant.app) as client:
+        response = client.post("/auth/login", json={"username": "test-user", "password": "test-password-123"})
+        assert response.status_code == 200
         yield client
 
 
@@ -67,3 +74,17 @@ def container():
     }
     fake.logs.return_value = b"Memory limit exceeded"
     return fake
+
+
+@pytest.fixture(scope="session")
+def login_hash():
+    import hashlib
+    salt = "test-salt"
+    digest = hashlib.pbkdf2_hmac("sha256", b"test-password-123", salt.encode(), 600_000)
+    return f"{salt}${digest.hex()}"
+
+
+@pytest.fixture
+def anonymous_client(assistant):
+    with TestClient(assistant.app) as client:
+        yield client

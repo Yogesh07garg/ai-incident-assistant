@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 import docker
 from database import init_db, SessionLocal, Incident
 import os
@@ -14,12 +14,26 @@ GITHUB_REPO = os.getenv("GITHUB_REPO")
 
 
 
+from auth import router as auth_router, require_user
+from starlette.middleware.sessions import SessionMiddleware
+import secrets
+
 app = FastAPI()
+app.include_router(auth_router)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("SESSION_SECRET") or secrets.token_hex(32),
+    session_cookie="incident_session",
+    max_age=3600,
+    same_site="lax",
+    https_only=os.getenv("COOKIE_SECURE", "false").lower() == "true",
+)
 from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[value.strip() for value in os.getenv("FRONTEND_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -32,7 +46,7 @@ ai_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 def health_check():
     return {"status": "healthy"}
 
-@app.get("/containers")
+@app.get("/containers", dependencies=[Depends(require_user)])
 def get_containers():
     containers = client.containers.list(all=True)
 
@@ -55,7 +69,7 @@ def get_containers():
 
     return result
 
-@app.get("/ci-status")
+@app.get("/ci-status", dependencies=[Depends(require_user)])
 def ci_status():
     if not GITHUB_TOKEN or not GITHUB_REPO:
         raise HTTPException(status_code=503, detail="CI integration not configured")
@@ -92,7 +106,7 @@ def ci_status():
         ],
     }
 
-@app.get("/logs/{container_id}")
+@app.get("/logs/{container_id}", dependencies=[Depends(require_user)])
 def get_container_logs(container_id: str):
     try:
         container = client.containers.get(container_id)
@@ -156,7 +170,7 @@ DIAGNOSIS_SCHEMA = {
     "required": ["failure_type", "root_cause", "suggested_fix", "confidence"],
 }
 
-@app.get("/diagnose/{container_id}")
+@app.get("/diagnose/{container_id}", dependencies=[Depends(require_user)])
 def diagnose_container(container_id: str):
     try:
         container = client.containers.get(container_id)
@@ -213,7 +227,7 @@ def diagnose_container(container_id: str):
     }
 
 
-@app.get("/incidents")
+@app.get("/incidents", dependencies=[Depends(require_user)])
 def list_incidents():
     db = SessionLocal()
     results = db.query(Incident).order_by(Incident.created_at.desc()).all()

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import axios, { API } from "./api";
 import "./App.css";
-const API = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8001";
+
 const labels = {
   oom_kill: "Out of memory",
   missing_or_bad_env_var: "Environment variable",
@@ -56,7 +56,7 @@ function TypewriterHeading() {
     let interval;
     const delay = window.setTimeout(() => {
       interval = window.setInterval(() => {
-        setLength(current => {
+        setLength((current) => {
           if (current + 1 >= text.length) window.clearInterval(interval);
           return Math.min(current + 1, text.length);
         });
@@ -70,7 +70,9 @@ function TypewriterHeading() {
 
   return (
     <h2 className="typewriter-heading" aria-label={text}>
-      <span className="typewriter-reserve" aria-hidden="true">{text}</span>
+      <span className="typewriter-reserve" aria-hidden="true">
+        {text}
+      </span>
       <span className="typewriter-text" aria-hidden="true">
         {text.slice(0, length)}
         {length < text.length && <span className="typewriter-caret" />}
@@ -78,7 +80,7 @@ function TypewriterHeading() {
     </h2>
   );
 }
-function App() {
+function App({ user, onLogout }) {
   const [containers, setContainers] = useState([]),
     [incidents, setIncidents] = useState([]),
     [ci, setCi] = useState(null);
@@ -201,7 +203,8 @@ function App() {
           <div className="profile">
             <span className="workspace-avatar">DEV</span>
             <div>
-              Developer workspace<small>Local environment</small>
+              {user.username}
+              <small>Signed in</small>
             </div>
           </div>
         </div>
@@ -211,14 +214,21 @@ function App() {
           <span>
             Workspace <span className="slash">/</span> <strong>Overview</strong>
           </span>
-          <span className={`connection ${connected === true ? "online" : ""}`}>
-            <i />
-            {connected === null
-              ? "Connecting"
-              : connected
-                ? "Service connected"
-                : "Service offline"}
-          </span>
+          <div className="topbar-session">
+            <span
+              className={`connection ${connected === true ? "online" : ""}`}
+            >
+              <i />
+              {connected === null
+                ? "Connecting"
+                : connected
+                  ? "Service connected"
+                  : "Service offline"}
+            </span>
+            <button className="signout-button" onClick={onLogout}>
+              Sign out
+            </button>
+          </div>
         </header>
         <main id="overview">
           <div className="page-heading">

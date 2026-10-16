@@ -21,6 +21,11 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       GITHUB_REPO: ${GITHUB_REPO}
+      LOGIN_USERNAME: ${LOGIN_USERNAME:-}
+      LOGIN_PASSWORD_HASH: ${LOGIN_PASSWORD_HASH:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:

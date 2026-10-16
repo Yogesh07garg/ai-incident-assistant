@@ -178,3 +178,38 @@ python -m venv venv
 Skip the environment creation command if `venv` already exists. Tests live in
 `tests/test_target_app.py` and `tests/test_assistant_service.py`, with shared
 fixtures in `tests/conftest.py`.
+
+## Dashboard login
+
+The dashboard uses one configured account with a salted password hash and a signed
+HTTP-only session cookie. From the repository root, run the account setup tool:
+
+```powershell
+python -m venv venv
+.\venv\Scripts\python.exe -m pip install -r tests/requirements.txt
+.\venv\Scripts\python.exe assistant-service/auth.py
+```
+
+Skip creating venv if it already exists. Enter your username and password twice.
+The tool saves LOGIN_USERNAME, LOGIN_PASSWORD_HASH, and a random SESSION_SECRET
+in .env while preserving your existing API keys. No default password is included.
+Running setup again rotates the secret and invalidates existing sessions after
+backend recreation. Keep .env out of Git.
+
+After code changes, rebuild both services:
+
+```powershell
+docker compose up -d --build assistant-service frontend
+```
+
+If only account settings changed, recreate the backend:
+
+```powershell
+docker compose up -d --force-recreate assistant-service
+```
+
+Open http://localhost:5173 and use your chosen username and original password.
+For local HTTP leave COOKIE_SECURE=false. Use a consistent hostname for frontend
+and API. This is a single-account demo flow, without signup, password recovery,
+login rate limiting, or server-side session revocation. Public deployment needs
+HTTPS, secure cookies, and additional authentication hardening.

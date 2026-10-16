@@ -36,3 +36,6 @@ htmlcov/
 
 # Local pytest study guide
 /tests/README.md
+
+# Local master interview reference
+/tests/MASTER_PROJECT_GUIDE.md
