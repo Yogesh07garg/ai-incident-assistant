@@ -1,0 +1,3 @@
+# Reuse the assistant service's pinned application dependencies.
+-r ../assistant-service/requirements.txt
+pytest==9.1.1

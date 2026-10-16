@@ -163,3 +163,18 @@ SSH into the instance using the generated key, install Docker, clone the repo, r
 ## License
 
 MIT
+
+## Running basic backend tests
+
+The pytest suite runs without Docker, PostgreSQL, or API keys. From the repository
+root, install the test dependencies and run the tests:
+
+```powershell
+python -m venv venv
+.\venv\Scripts\python.exe -m pip install -r tests/requirements.txt
+.\venv\Scripts\python.exe -m pytest -v
+```
+
+Skip the environment creation command if `venv` already exists. Tests live in
+`tests/test_target_app.py` and `tests/test_assistant_service.py`, with shared
+fixtures in `tests/conftest.py`.
